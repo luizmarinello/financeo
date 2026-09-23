@@ -1,0 +1,23 @@
+{
+  "name": "financas-push",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "genkeys": "node genkeys.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "check": "tsx selfcheck.ts"
+  },
+  "dependencies": {
+    "@block65/webcrypto-web-push": "^2.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260921.1",
+    "tsx": "^4.23.15",
+    "wrangler": "^4.15.0"
+  },
+  "allowScripts": {
+    "workerd@1.20260921.1": true
+  }
+}

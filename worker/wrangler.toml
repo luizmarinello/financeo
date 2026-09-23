@@ -1,0 +1,31 @@
+﻿name = "financas-push"
+main = "src/index.ts"
+compatibility_date = "2025-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Uma checagem por dia, 12:00 UTC = 09:00 em Brasilia.
+#
+# ATENCAO: o Cron Trigger desta conta NAO dispara (agendamento aparece
+# registrado na API da Cloudflare, mas nenhuma execucao acontece). O disparo
+# real vem do GitHub Actions chamando POST /run, em .github/workflows/
+# lembretes.yml. Este bloco fica aqui para o dia em que a Cloudflare voltar a
+# funcionar: o envio e idempotente, entao os dois juntos nao duplicam nada.
+[triggers]
+crons = ["0 12 * * *"]
+
+[[kv_namespaces]]
+binding = "REMINDERS"
+id = "dab43f977fbc45fe8db4bac82b52fc01"
+
+[vars]
+# Contato exigido pelo padrao VAPID: os servicos de push (Google, Mozilla)
+# veem este valor e usam se precisarem falar com o dono do servidor.
+VAPID_SUBJECT = "mailto:luizhenrique@bellacasaeokada.com.br"
+# Origens autorizadas a falar com o worker, separadas por virgula:
+# o app publicado e o app rodando local durante o desenvolvimento.
+ALLOWED_ORIGIN = "https://luizmarinello.github.io,http://localhost:5178"
+
+# Os segredos NAO vao aqui. Use:
+#   npx wrangler secret put VAPID_PUBLIC_KEY
+#   npx wrangler secret put VAPID_PRIVATE_KEY
+#   npx wrangler secret put APP_KEY

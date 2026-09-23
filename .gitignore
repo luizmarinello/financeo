@@ -1,0 +1,11 @@
+node_modules
+dist
+dev-dist
+.env
+.env.local
+.wrangler
+
+# segredos do worker (chave privada VAPID)
+worker/.dev.vars
+*.local
+tsconfig.tsbuildinfo

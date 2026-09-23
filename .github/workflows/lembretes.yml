@@ -1,0 +1,31 @@
+name: Disparar lembretes
+
+# Por que isto existe: o Cron Trigger da Cloudflare nao dispara nesta conta
+# (agendamento registrado na API, zero execucoes em 35+ minutos com `* * * * *`).
+# O GitHub Actions chama o endpoint /run do worker, que faz exatamente o que o
+# cron nativo faria. E idempotente: o campo `sent` no KV impede envio repetido,
+# entao se o cron da Cloudflare voltar a funcionar nada e notificado duas vezes.
+
+on:
+  schedule:
+    # 12:00 UTC = 09:00 em Brasilia. O Actions costuma atrasar alguns minutos.
+    - cron: '0 12 * * *'
+  workflow_dispatch: # permite disparar na mao pela aba Actions
+
+jobs:
+  disparar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar o worker
+        env:
+          API: ${{ vars.VITE_PUSH_API }}
+          APP_KEY: ${{ secrets.PUSH_APP_KEY }}
+        run: |
+          if [ -z "$API" ] || [ -z "$APP_KEY" ]; then
+            echo "Falta a variable VITE_PUSH_API ou o secret PUSH_APP_KEY."
+            exit 1
+          fi
+          resposta=$(curl -sS --fail-with-body -m 60 -X POST "$API/run" -H "x-app-key: $APP_KEY")
+          echo "$resposta"
+          # falha o job se o worker reportou erro, senao o problema passa batido
+          echo "$resposta" | grep -q '"ok":true' || exit 1
