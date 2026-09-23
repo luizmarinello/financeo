@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { db, uid, type Kind } from '../db'
+import { byName, db, uid, type Kind } from '../db'
 import { today } from '../dates'
 import { formatMoney, splitInstallments } from '../money'
 import { addEntry } from '../finance/tx'
@@ -31,11 +31,21 @@ export default function Add() {
   const [saving, setSaving] = useState(false)
 
   const categories = useLiveQuery(
-    () => db.categories.where('archived').equals(0).filter((c) => c.kind === type).sortBy('name'),
+    () =>
+      db.categories
+        .where('archived')
+        .equals(0)
+        .filter((c) => c.kind === type)
+        .toArray()
+        .then((r) => r.sort(byName)),
     [type],
     [],
   )
-  const accounts = useLiveQuery(() => db.accounts.where('archived').equals(0).sortBy('name'), [], [])
+  const accounts = useLiveQuery(
+    () => db.accounts.where('archived').equals(0).toArray().then((r) => r.sort(byName)),
+    [],
+    [],
+  )
   const cards = useLiveQuery(() => db.cards.toArray(), [], [])
   const shortcuts = useLiveQuery(
     () => db.shortcuts.orderBy('uses').reverse().limit(8).toArray(),

@@ -14,6 +14,7 @@ import {
   invoiceFor,
 } from '../dates'
 import { formatMoney, parseMoney, splitInstallments } from '../money'
+import { installmentDates } from './tx'
 import { budgetStatus } from './budget'
 import { forecast } from './forecast'
 import { balances, monthSummary, totalLiquid } from './balance'
@@ -81,6 +82,32 @@ for (const [total, n] of casos) {
   assert.ok(Math.max(...parts) - Math.min(...parts) <= 1, 'parcelas diferem em no máximo 1 centavo')
 }
 assert.deepEqual(splitInstallments(10000, 3), [3334, 3333, 3333])
+
+// ---------- datas das parcelas ----------
+// Bug real: a parcela 1 usava a data da compra e as seguintes o mes da FATURA.
+// Como uma compra depois do fechamento ja cai na fatura do mes seguinte, toda
+// parcela apos a primeira ganhava um mes a mais e um mes inteiro ficava zerado
+// no resumo de gastos.
+{
+  assert.deepEqual(installmentDates('2026-09-22', 3), ['2026-09-22', '2026-10-22', '2026-11-22'])
+  assert.deepEqual(installmentDates('2026-09-22', 1), ['2026-09-22'])
+
+  const doze = installmentDates('2026-09-22', 12)
+  assert.equal(doze.length, 12)
+  assert.equal(doze[0], '2026-09-22')
+  assert.equal(doze[11], '2027-08-22', 'vira o ano sem pular mes')
+
+  // nenhum mes repetido e nenhum buraco: e isso que o bug quebrava
+  const meses = doze.map((d) => d.slice(0, 7))
+  assert.equal(new Set(meses).size, 12, 'cada parcela em um mes diferente')
+  for (let i = 1; i < meses.length; i++) {
+    assert.equal(meses[i], addMonths(meses[i - 1], 1), `buraco entre ${meses[i - 1]} e ${meses[i]}`)
+  }
+
+  // dia 31 em mes curto encaixa no ultimo dia, sem vazar para o mes seguinte
+  assert.deepEqual(installmentDates('2026-01-31', 3), ['2026-01-31', '2026-02-28', '2026-03-31'])
+  assert.deepEqual(installmentDates('2024-01-31', 2), ['2024-01-31', '2024-02-29'])
+}
 
 // ---------- fixtures ----------
 const cash: Account = { id: 'a1', name: 'Espécie', kind: 'cash', openingCents: 50000, archived: 0 }
@@ -279,6 +306,66 @@ const tx = (o: Partial<Transaction>): Transaction => ({
   })
   assert.equal(comMeta[0].goalsCents, 50000)
   assert.equal(comMeta[0].endCents, f[0].endCents - 50000)
+}
+
+// ---------- consultas batem com o schema do Dexie? ----------
+// Este check existe porque um `orderBy('name')` num campo NAO indexado passou
+// pelo TypeScript, pelo build e pelo lint, e so explodiu em runtime com
+// SchemaError -- derrubando a tela inteira para tela preta. Nenhum teste de
+// logica pura pega isso: e um contrato entre o codigo e o schema.
+{
+  const fs = await import('node:fs')
+  const path = await import('node:path')
+  const raiz = path.join(import.meta.dirname, '..')
+
+  // le os indices declarados em db.ts: 'id, kind, archived' -> Set
+  const schema = fs.readFileSync(path.join(raiz, 'db.ts'), 'utf8')
+  const bloco = schema.match(/\.stores\(\{([\s\S]*?)\}\)/)
+  assert.ok(bloco, 'nao achei o .stores() em db.ts')
+  const indices = new Map<string, Set<string>>()
+  for (const [, tabela, campos] of bloco![1].matchAll(/(\w+)\s*:\s*'([^']*)'/g)) {
+    indices.set(
+      tabela,
+      new Set(
+        campos
+          .split(',')
+          .map((c) => c.trim().replace(/^[&*]|^\[|\]$/g, ''))
+          .filter(Boolean),
+      ),
+    )
+  }
+  assert.ok(indices.size >= 9, `schema com poucas tabelas: ${indices.size}`)
+
+  const arquivos: string[] = []
+  const varrer = (dir: string) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const f = path.join(dir, e.name)
+      if (e.isDirectory()) varrer(f)
+      else if (/\.tsx?$/.test(e.name) && !e.name.includes('selfcheck')) arquivos.push(f)
+    }
+  }
+  varrer(raiz)
+
+  const problemas: string[] = []
+  for (const arquivo of arquivos) {
+    const src = fs.readFileSync(arquivo, 'utf8')
+    for (const m of src.matchAll(/db\.(\w+)\s*\.\s*(orderBy|where)\(\s*'([^']+)'/g)) {
+      const [, tabela, metodo, campo] = m
+      const campos = indices.get(tabela)
+      if (!campos) {
+        problemas.push(`${path.basename(arquivo)}: tabela "${tabela}" nao existe no schema`)
+      } else if (!campos.has(campo)) {
+        problemas.push(
+          `${path.basename(arquivo)}: ${metodo}('${campo}') em "${tabela}", que indexa apenas [${[...campos].join(', ')}]`,
+        )
+      }
+    }
+  }
+  assert.deepEqual(
+    problemas,
+    [],
+    `consulta em campo nao indexado (Dexie lanca SchemaError em runtime): ${problemas.join(' | ')}`,
+  )
 }
 
 console.log('✓ todos os checks passaram')

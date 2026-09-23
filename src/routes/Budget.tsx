@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../db'
+import { byName, db } from '../db'
 import { thisMonth } from '../dates'
 import { formatMoney } from '../money'
 import { budgetStatus } from '../finance/budget'
@@ -14,7 +14,12 @@ export default function Budget() {
   const data = useLiveQuery(async () => {
     const [budgets, categories, txs] = await Promise.all([
       db.budgets.toArray(),
-      db.categories.where('archived').equals(0).filter((c) => c.kind === 'expense').sortBy('name'),
+      db.categories
+        .where('archived')
+        .equals(0)
+        .filter((c) => c.kind === 'expense')
+        .toArray()
+        .then((r) => r.sort(byName)),
       db.transactions.toArray(),
     ])
     return { budgets, categories, txs }

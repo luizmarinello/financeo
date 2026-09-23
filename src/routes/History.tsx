@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../db'
+import { byName, db } from '../db'
 import { dateLabel, thisMonth } from '../dates'
 import { formatMoney } from '../money'
 import { entriesOfMonth, removeEntry } from '../finance/tx'
@@ -15,8 +15,8 @@ export default function History() {
   const [selected, setSelected] = useState<string | null>(null)
 
   const txs = useLiveQuery(() => entriesOfMonth(month), [month], [])
-  const categories = useLiveQuery(() => db.categories.orderBy('name').toArray(), [], [])
-  const accounts = useLiveQuery(() => db.accounts.orderBy('name').toArray(), [], [])
+  const categories = useLiveQuery(() => db.categories.toArray().then((r) => r.sort(byName)), [], [])
+  const accounts = useLiveQuery(() => db.accounts.toArray().then((r) => r.sort(byName)), [], [])
 
   const catName = (id: string) => categories.find((c) => c.id === id)?.name ?? '—'
   const accName = (id: string) => accounts.find((a) => a.id === id)?.name ?? '—'

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, type Bill, type Kind } from '../db'
+import { byName, db, uid, type Bill, type Kind } from '../db'
 import { dateIn, dateLabel, daysBetween, thisMonth, today } from '../dates'
 import { formatMoney } from '../money'
 import { addEntry } from '../finance/tx'
@@ -23,8 +23,16 @@ export default function Bills() {
   const [form, setForm] = useState(BLANK)
 
   const bills = useLiveQuery(() => db.bills.toArray(), [], [])
-  const categories = useLiveQuery(() => db.categories.where('archived').equals(0).sortBy('name'), [], [])
-  const accounts = useLiveQuery(() => db.accounts.where('archived').equals(0).sortBy('name'), [], [])
+  const categories = useLiveQuery(
+    () => db.categories.where('archived').equals(0).toArray().then((r) => r.sort(byName)),
+    [],
+    [],
+  )
+  const accounts = useLiveQuery(
+    () => db.accounts.where('archived').equals(0).toArray().then((r) => r.sort(byName)),
+    [],
+    [],
+  )
 
   const catName = (id: string) => categories.find((c) => c.id === id)?.name ?? '—'
   const formCategories = categories.filter((c) => c.kind === form.type)

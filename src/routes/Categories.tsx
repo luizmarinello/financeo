@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, type Category, type Kind } from '../db'
+import { byName, db, uid, type Category, type Kind } from '../db'
 import { Card, Empty, Segmented, Sheet, Topbar } from '../components/ui'
 
 export default function Categories() {
@@ -8,7 +8,7 @@ export default function Categories() {
   const [editing, setEditing] = useState<Category | 'new' | null>(null)
   const [name, setName] = useState('')
 
-  const all = useLiveQuery(() => db.categories.orderBy('name').toArray(), [], [])
+  const all = useLiveQuery(() => db.categories.toArray().then((r) => r.sort(byName)), [], [])
   const mine = all.filter((c) => c.kind === kind)
   const active = mine.filter((c) => !c.archived)
   const archived = mine.filter((c) => c.archived)

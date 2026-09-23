@@ -1,18 +1,19 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { db } from '../db'
-import { dateLabel, monthLabel, thisMonth, today } from '../dates'
+import { dateLabel, monthLabel, monthOf, thisMonth, today } from '../dates'
 import { formatMoney } from '../money'
 import { balances, monthSummary, totalLiquid } from '../finance/balance'
 import { budgetStatus } from '../finance/budget'
 import { invoiceTotalsByKey } from '../finance/invoice'
 import { invoiceDueDate } from '../dates'
 import { syncScheduleSoon } from '../notify'
-import { Card, Money, Progress, Topbar } from '../components/ui'
+import { Card, Money, MonthNav, Progress } from '../components/ui'
 
 export default function Home() {
-  const month = thisMonth()
+  const [month, setMonth] = useState(thisMonth())
+  const mesCorrente = month === thisMonth()
 
   // a agenda de lembretes pode ter mudado por conta do tempo passar
   useEffect(syncScheduleSoon, [])
@@ -48,21 +49,26 @@ export default function Home() {
     }))
     .filter((i) => i.cents > 0 && !i.paid)
 
-  // parcela futura não é "último lançamento": ela ainda vai acontecer
+  // No mês corrente, parcela futura não é "último lançamento": ela ainda vai
+  // acontecer. Em mês passado ou futuro, mostra o mês inteiro.
   const hoje = today()
   const recent = data.txs
-    .filter((t) => t.date <= hoje)
+    .filter((t) => monthOf(t.date) === month && (!mesCorrente || t.date <= hoje))
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 5)
   const catName = (id: string) => data.categories.find((c) => c.id === id)?.name ?? '—'
 
   return (
     <>
-      <Topbar title={monthLabel(month, true)} />
+      <div style={{ padding: 'max(env(safe-area-inset-top), 0.75rem) 0 0.75rem' }}>
+        <MonthNav month={month} onChange={setMonth} />
+      </div>
 
       <Card>
         <p className="muted" style={{ margin: 0 }}>
-          Disponível hoje
+          {/* navegando outro mês, o saldo continua sendo o de hoje: sem a data
+              explícita isso vira leitura errada */}
+          {mesCorrente ? 'Disponível hoje' : `Disponível hoje (${dateLabel(hoje)})`}
         </p>
         <p className={`big ${liquid < 0 ? 'expense' : ''}`} style={{ margin: '2px 0 12px' }}>
           {formatMoney(liquid)}
@@ -121,8 +127,14 @@ export default function Home() {
         </Card>
       )}
 
-      <Card title="Últimos lançamentos">
-        {recent.length === 0 && <p className="muted">Nada lançado ainda. Toque no + para começar.</p>}
+      <Card title={mesCorrente ? 'Últimos lançamentos' : `Lançamentos de ${monthLabel(month, true)}`}>
+        {recent.length === 0 && (
+          <p className="muted">
+            {mesCorrente
+              ? 'Nada lançado ainda. Toque no + para começar.'
+              : 'Nenhum lançamento neste mês.'}
+          </p>
+        )}
         {recent.map((t) => (
           <div className="row" key={t.id}>
             <div className="grow" style={{ overflow: 'hidden' }}>
@@ -146,9 +158,6 @@ export default function Home() {
       <Link to="/previsao" className="btn" style={{ width: '100%' }}>
         Previsão dos próximos 3 meses →
       </Link>
-      <p className="muted" style={{ textAlign: 'center', marginTop: 14 }}>
-        {dateLabel(today())}
-      </p>
     </>
   )
 }

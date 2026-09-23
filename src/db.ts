@@ -138,6 +138,16 @@ db.version(1).stores({
 
 export const uid = () => crypto.randomUUID()
 
+/**
+ * Ordena por nome respeitando acento: sem `localeCompare`, "Água" vai parar
+ * depois de "Transporte" porque 'Á' tem código maior que 'Z'.
+ *
+ * Use isto em vez de `orderBy('name')`: `name` NAO e um indice, e o Dexie
+ * lanca SchemaError e derruba a tela inteira.
+ */
+export const byName = <T extends { name: string }>(a: T, b: T) =>
+  a.name.localeCompare(b.name, 'pt-BR')
+
 const SEED_CATEGORIES: Array<[string, Kind]> = [
   ['Alimentação', 'expense'],
   ['Mercado', 'expense'],
