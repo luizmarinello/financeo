@@ -33,7 +33,10 @@ export const isStandalone = () =>
   matchMedia('(display-mode: standalone)').matches ||
   (navigator as { standalone?: boolean }).standalone === true
 
-export const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent)
+export const isIOS = () =>
+  /iP(hone|ad|od)/.test(navigator.userAgent) ||
+  // iPad recente se declara como Mac; o toque é o que o denuncia
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 
 // ---------- notificação local (orçamento) ----------
 
@@ -88,27 +91,80 @@ function urlBase64ToUint8Array(base64: string) {
   return Uint8Array.from(raw, (c) => c.charCodeAt(0))
 }
 
+/**
+ * Traduz o erro do navegador para algo que diga o que fazer. A mensagem crua
+ * ("Registration failed - push service error") nao ajuda ninguem.
+ */
+function explicar(err: unknown): string {
+  const nome = err instanceof Error ? err.name : ''
+  const msg = err instanceof Error ? err.message : String(err)
+
+  if (/push service error|AbortError/i.test(nome + msg)) {
+    return isIOS()
+      ? 'O serviço de push da Apple recusou a inscrição. Costuma ser o app aberto pelo Safari em vez do ícone da tela inicial: feche o Safari e abra pelo ícone. Se já estiver assim, desinstale e adicione de novo.'
+      : 'O serviço de push do navegador recusou a inscrição. Quase sempre é rede: desligue VPN ou economia de dados, confira se a data e a hora do aparelho estão automáticas, e tente de novo. Em aparelho sem os serviços do Google, o push não funciona.'
+  }
+  if (/NotAllowedError/i.test(nome)) return 'A permissão de notificação está bloqueada nas configurações do site.'
+  if (/NotSupportedError/i.test(nome)) return 'Este navegador não suporta push nesta tela.'
+  if (/Failed to fetch|NetworkError/i.test(msg)) {
+    return 'A inscrição funcionou, mas não consegui falar com o servidor. Toque em Ativar de novo quando tiver internet.'
+  }
+  return msg || 'Não deu para ativar.'
+}
+
+/** A inscrição guardada precisa ser da chave VAPID atual, senão o envio falha calado. */
+function chaveConfere(sub: PushSubscription): boolean {
+  const atual = sub.options?.applicationServerKey
+  if (!atual) return false
+  const a = new Uint8Array(atual)
+  const b = urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+  return a.length === b.length && a.every((v, i) => v === b[i])
+}
+
 /** Pede permissão e registra a inscrição no servidor. Devolve o que deu errado. */
 export async function enablePush(): Promise<{ ok: boolean; reason?: string }> {
   if (!notificationsSupported()) return { ok: false, reason: 'Este navegador não suporta notificações.' }
   if (isIOS() && !isStandalone())
-    return { ok: false, reason: 'No iPhone, adicione o app à tela inicial antes de ativar.' }
+    return {
+      ok: false,
+      reason: 'No iPhone o push só funciona com o app instalado: toque em Compartilhar, depois "Adicionar à Tela de Início", e abra pelo ícone.',
+    }
   if (!pushConfigured()) return { ok: false, reason: 'Servidor de push não configurado (veja o README).' }
 
-  const permission = await Notification.requestPermission()
-  if (permission !== 'granted') return { ok: false, reason: 'Permissão negada.' }
+  try {
+    // O service worker vem ANTES de pedir permissão: no iOS o subscribe tem de
+    // acontecer colado ao gesto do usuário, e esperar o SW depois da permissão
+    // gasta esse tempo.
+    const reg = await navigator.serviceWorker.ready
 
-  const reg = await navigator.serviceWorker.ready
-  const sub =
-    (await reg.pushManager.getSubscription()) ??
-    (await reg.pushManager.subscribe({
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') {
+      return {
+        ok: false,
+        reason:
+          permission === 'denied'
+            ? 'Permissão negada. Para reverter, abra as configurações do site no navegador e permita notificações.'
+            : 'Permissão não concedida.',
+      }
+    }
+
+    let sub = await reg.pushManager.getSubscription()
+    // inscrição de uma chave antiga não serve: o servidor não consegue enviar
+    if (sub && !chaveConfere(sub)) {
+      await sub.unsubscribe().catch(() => {})
+      sub = null
+    }
+    sub ??= await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-    }))
+    })
 
-  await db.settings.put({ key: SETTING_ENDPOINT, value: sub.endpoint })
-  await syncSchedule(sub)
-  return { ok: true }
+    await db.settings.put({ key: SETTING_ENDPOINT, value: sub.endpoint })
+    await syncSchedule(sub)
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, reason: explicar(err) }
+  }
 }
 
 export async function disablePush() {

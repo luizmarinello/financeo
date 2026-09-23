@@ -66,6 +66,21 @@ export default function Settings() {
 
   const iosBlocked = isIOS() && !isStandalone()
 
+  // Diagnostico: o push falha em contextos que eu nao consigo inspecionar de
+  // fora (celular, outro navegador). Isto mostra tudo que decide se ele pode
+  // funcionar, para copiar e colar em vez de descrever o erro.
+  const diagnostico = [
+    `instalado: ${isStandalone() ? 'sim' : 'NAO'}`,
+    `iOS: ${isIOS() ? 'sim' : 'nao'}`,
+    `permissao: ${typeof Notification === 'undefined' ? 'indisponivel' : Notification.permission}`,
+    `PushManager: ${'PushManager' in window ? 'sim' : 'NAO'}`,
+    `serviceWorker: ${'serviceWorker' in navigator ? 'sim' : 'NAO'}`,
+    `servidor: ${pushConfigured() ? 'configurado' : 'NAO configurado'}`,
+    `origem: ${location.origin}`,
+    `inscrito: ${enabled === null ? '?' : enabled ? 'sim' : 'nao'}`,
+    `ua: ${navigator.userAgent.slice(0, 90)}`,
+  ].join('\n')
+
   return (
     <>
       <Topbar title="Ajustes" />
@@ -170,6 +185,43 @@ export default function Settings() {
           ))}
         </Card>
       )}
+
+      <Card title="Diagnóstico do push">
+        <p className="muted" style={{ marginTop: 0 }}>
+          Se a ativação falhar, copie isto e me mande. É o que decide se o push
+          pode funcionar neste aparelho.
+        </p>
+        <pre
+          style={{
+            margin: 0,
+            padding: '0.625rem',
+            background: 'var(--surface-2)',
+            border: '1px solid var(--line)',
+            borderRadius: 'var(--radius-md)',
+            fontSize: '0.75rem',
+            lineHeight: 1.5,
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            overflowX: 'auto',
+          }}
+        >
+          {diagnostico}
+        </pre>
+        <button
+          className="btn sm"
+          style={{ marginTop: '0.625rem' }}
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(diagnostico)
+              setMsg('Diagnóstico copiado.')
+            } catch {
+              setMsg('Não consegui copiar. Selecione o texto acima na mão.')
+            }
+          }}
+        >
+          Copiar diagnóstico
+        </button>
+      </Card>
 
       <Card title="Backup">
         <p className="muted" style={{ marginTop: 0 }}>
