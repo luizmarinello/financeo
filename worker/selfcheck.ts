@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict'
 import { buildPushPayload } from '@block65/webcrypto-web-push'
-import { dateInZone, selectDue, shiftDate, type Reminder } from './src/index.js'
+import { dateInZone, enderecoDePushValido, selectDue, shiftDate, type Reminder } from './src/index.js'
 
 const r = (id: string, sendAt: string): Reminder => ({ id, sendAt, title: id, body: 'x' })
 
@@ -18,6 +18,27 @@ assert.equal(dateInZone(new Date('2026-03-05T02:00:00Z'), 180), '2026-03-04')
 assert.equal(dateInZone(new Date('2026-03-05T12:00:00Z'), 180), '2026-03-05')
 // e o cron das 12:00 UTC cai no dia certo o ano todo
 assert.equal(dateInZone(new Date('2026-12-31T12:00:00Z'), 180), '2026-12-31')
+
+// ---------- endpoints aceitos ----------
+// O app e publico e a APP_KEY viaja no bundle, entao esta lista e o que
+// impede o worker de virar amplificador de requisicao contra terceiros.
+for (const bom of [
+  'https://fcm.googleapis.com/fcm/send/abc',
+  'https://updates.push.services.mozilla.com/wpush/v2/abc',
+  'https://web.push.apple.com/abc',
+  'https://xyz.notify.windows.com/w/?token=abc',
+]) {
+  assert.equal(enderecoDePushValido(bom), true, `deveria aceitar ${bom}`)
+}
+for (const ruim of [
+  'https://exemplo.com/webhook',
+  'http://fcm.googleapis.com/fcm/send/abc', // sem TLS
+  'https://fcm.googleapis.com.invasor.net/abc', // sufixo enganoso
+  'https://interno.local/admin',
+  'nao-e-url',
+]) {
+  assert.equal(enderecoDePushValido(ruim), false, `deveria recusar ${ruim}`)
+}
 
 // ---------- o que dispara ----------
 const hoje = '2026-03-10'

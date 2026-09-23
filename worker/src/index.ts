@@ -90,7 +90,7 @@ async function handleSchedule(req: Request, env: Env, cors: HeadersInit) {
 
   const sub = body.subscription
   if (!sub?.endpoint || !sub.keys?.auth || !sub.keys?.p256dh) throw new Error('subscription inválida')
-  if (!/^https:\/\//.test(sub.endpoint)) throw new Error('endpoint inválido')
+  if (!enderecoDePushValido(sub.endpoint)) throw new Error('endpoint inválido')
 
   const reminders = (body.reminders ?? []).filter(isReminder).slice(0, MAX_REMINDERS)
   const key = await subKey(sub.endpoint)
@@ -240,6 +240,31 @@ async function send(
 }
 
 // ---------- utilidades ----------
+
+/**
+ * So os servicos de push dos navegadores. Sem esta lista, qualquer um com a
+ * APP_KEY (que viaja no bundle do site, entao e publica na pratica) poderia
+ * cadastrar um endpoint arbitrario e usar o cron como amplificador de
+ * requisicoes contra terceiros.
+ */
+const HOSTS_DE_PUSH = [
+  'fcm.googleapis.com', // Chrome, Edge, Android
+  'updates.push.services.mozilla.com', // Firefox
+  'web.push.apple.com', // Safari, iOS
+  'notify.windows.com', // Windows legado
+  'push.services.mozilla.com',
+]
+
+export function enderecoDePushValido(endpoint: string) {
+  let url: URL
+  try {
+    url = new URL(endpoint)
+  } catch {
+    return false
+  }
+  if (url.protocol !== 'https:') return false
+  return HOSTS_DE_PUSH.some((h) => url.hostname === h || url.hostname.endsWith(`.${h}`))
+}
 
 function isReminder(r: unknown): r is Reminder {
   const x = r as Reminder

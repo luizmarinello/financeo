@@ -18,9 +18,10 @@ binding = "REMINDERS"
 id = "dab43f977fbc45fe8db4bac82b52fc01"
 
 [vars]
-# Contato exigido pelo padrao VAPID: os servicos de push (Google, Mozilla)
-# veem este valor e usam se precisarem falar com o dono do servidor.
-VAPID_SUBJECT = "mailto:luizhenrique@bellacasaeokada.com.br"
+# Contato exigido pelo padrao VAPID. O padrao aceita uma URL https no lugar
+# de mailto: e este repositorio e publico, entao usar a URL evita deixar um
+# e-mail exposto para coleta.
+VAPID_SUBJECT = "https://luizmarinello.github.io/financeo/"
 # Origens autorizadas a falar com o worker, separadas por virgula:
 # o app publicado e o app rodando local durante o desenvolvimento.
 ALLOWED_ORIGIN = "https://luizmarinello.github.io,http://localhost:5178"

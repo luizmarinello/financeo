@@ -125,8 +125,8 @@ Sem elas o app publica e funciona inteiro, menos o lembrete com o app fechado.
 
 ## Backend de notificações
 
-**Já está no ar:** `https://financas-push.luizmarinello.workers.dev`
-(worker `financas-push`, KV `REMINDERS`).
+O worker (`financas-push` + KV `REMINDERS`) já está publicado. A URL fica em
+`.env.local` e nas Variables do repositório, não aqui.
 
 Para republicar depois de mexer no código: `cd worker && npm run deploy`.
 Para ver o que aconteceu: `npm run tail`.
@@ -184,7 +184,7 @@ npx wrangler kv namespace create REMINDERS
 ```
 
 Cole o `id` que o comando devolveu em `wrangler.toml`, e ajuste `VAPID_SUBJECT`
-(seu e-mail) e `ALLOWED_ORIGIN` (`https://SEU-USUARIO.github.io`).
+(seu e-mail) e `ALLOWED_ORIGIN` (a URL do seu GitHub Pages).
 
 ```bash
 npx wrangler secret put VAPID_PUBLIC_KEY
@@ -193,7 +193,7 @@ npx wrangler secret put APP_KEY
 npm run deploy
 ```
 
-O deploy imprime a URL (`https://financas-push.SEU-SUBDOMINIO.workers.dev`).
+O deploy imprime a URL do worker.
 Coloque ela em `VITE_PUSH_API`, junto com `VITE_VAPID_PUBLIC_KEY` e
 `VITE_PUSH_KEY`, no `.env.local` (local) e nas Variables do repositório (Pages).
 
@@ -219,6 +219,29 @@ O cron roda às 12:00 UTC (09:00 em Brasília). Para mudar, edite `crons` em
 Uma entrada de KV por aparelho: a inscrição de push, o fuso e a lista de
 lembretes. Expira sozinha em 180 dias sem uso. **Ajustes → Desativar** apaga a
 entrada no servidor e cancela a inscrição.
+
+## O que é público e o que não é
+
+Este repositório é público, e o app publicado também. Vale saber o que isso
+significa:
+
+| Item | Onde vive | Público? |
+|---|---|---|
+| Seus lançamentos, saldos, faturas | IndexedDB do aparelho | **Não**, nunca saem dali |
+| Chave privada VAPID | secret da Cloudflare + `worker/.dev.vars` (fora do git) | **Não** |
+| Chave pública VAPID, URL do worker, `APP_KEY` | compiladas no bundle do site | Sim, inevitavelmente |
+| Título e valor das contas recorrentes | KV do worker, só o texto do lembrete | Só para quem tem acesso à sua conta Cloudflare |
+
+A `APP_KEY` **não é um segredo de verdade**: ela viaja no JavaScript do site.
+Serve para barrar varredura automática, não para autenticar. O que ela protege
+é a cota do KV, não os seus dados. Quem a tiver consegue gravar agenda ou
+chamar `/run` (idempotente, inofensivo); ninguém consegue ler seu histórico,
+porque ele não está no servidor.
+
+Por isso o worker só aceita endpoints dos serviços de push dos navegadores
+(`enderecoDePushValido`). Sem essa lista, alguém com a chave poderia cadastrar
+um endereço qualquer e usar o cron como amplificador de requisições contra
+terceiros.
 
 ## Backup
 
