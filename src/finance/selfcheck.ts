@@ -14,7 +14,7 @@ import {
   invoiceFor,
 } from '../dates'
 import { formatMoney, parseMoney, splitInstallments } from '../money'
-import { installmentDates } from './tx'
+import { corrigirParcelas, installmentDates } from './installments'
 import { budgetStatus } from './budget'
 import { forecast } from './forecast'
 import { balances, monthSummary, totalLiquid } from './balance'
@@ -107,6 +107,62 @@ assert.deepEqual(splitInstallments(10000, 3), [3334, 3333, 3333])
   // dia 31 em mes curto encaixa no ultimo dia, sem vazar para o mes seguinte
   assert.deepEqual(installmentDates('2026-01-31', 3), ['2026-01-31', '2026-02-28', '2026-03-31'])
   assert.deepEqual(installmentDates('2024-01-31', 2), ['2024-01-31', '2024-02-29'])
+}
+
+// ---------- migracao das parcelas antigas ----------
+// A v2 do banco corrige o que ficou gravado errado. A parcela 1 e a ancora:
+// ela sempre teve a data certa.
+{
+  const parcela = (o: Partial<Transaction>): Transaction => ({
+    id: `p${o.installmentN}-${o.purchaseId}`,
+    type: 'expense',
+    amountCents: 10000,
+    categoryId: 'c1',
+    accountId: 'a3',
+    date: '2026-09-22',
+    purchaseId: 'compra1',
+    installmentOf: 3,
+    ...o,
+  })
+
+  // exatamente o que o bug gravava: set, nov, dez (outubro pulado)
+  const torto = [
+    parcela({ installmentN: 1, date: '2026-09-22', invoiceMonth: '2026-10' }),
+    parcela({ installmentN: 2, date: '2026-11-22', invoiceMonth: '2026-11' }),
+    parcela({ installmentN: 3, date: '2026-12-22', invoiceMonth: '2026-12' }),
+  ]
+  const corr = corrigirParcelas(torto)
+  assert.equal(corr.length, 2, 'so as parcelas 2 e 3 mudam')
+  assert.deepEqual(
+    corr.map((c) => c.para),
+    ['2026-10-22', '2026-11-22'],
+  )
+  assert.ok(!corr.some((c) => c.id.startsWith('p1-')), 'a parcela 1 nunca e tocada')
+
+  // rodar de novo nao muda mais nada: a migracao e idempotente
+  const certo = torto.map((t) => {
+    const c = corr.find((x) => x.id === t.id)
+    return c ? { ...t, date: c.para } : t
+  })
+  assert.deepEqual(corrigirParcelas(certo), [], 'segunda passada nao mexe em nada')
+
+  // lancamento avulso (sem purchaseId) fica de fora
+  const avulso = parcela({ purchaseId: undefined, installmentN: undefined, installmentOf: undefined })
+  assert.deepEqual(corrigirParcelas([avulso]), [])
+
+  // parcela 1 apagada: sem ancora, nao da para saber a data da compra
+  assert.deepEqual(
+    corrigirParcelas(torto.filter((t) => t.installmentN !== 1)),
+    [],
+    'sem a parcela 1 o grupo fica intacto em vez de chutar',
+  )
+
+  // duas compras diferentes nao se misturam
+  const outra = parcela({ purchaseId: 'compra2', installmentN: 2, date: '2026-12-05', installmentOf: 2 })
+  const ancora = parcela({ purchaseId: 'compra2', installmentN: 1, date: '2026-10-05', installmentOf: 2 })
+  const misto = corrigirParcelas([...torto, ancora, outra])
+  assert.equal(misto.filter((c) => c.id.includes('compra2')).length, 1)
+  assert.equal(misto.find((c) => c.id.includes('compra2'))!.para, '2026-11-05')
 }
 
 // ---------- fixtures ----------

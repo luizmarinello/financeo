@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie'
+import { corrigirParcelas } from './finance/installments'
 
 /** Valores sempre em centavos inteiros. Datas sempre 'YYYY-MM-DD'. */
 export type ISODate = string
@@ -135,6 +136,43 @@ db.version(1).stores({
   invoicePayments: 'key, cardId',
   settings: 'key',
 })
+
+/**
+ * v2 corrige as datas de compras parceladas gravadas antes de 24/09/2026.
+ *
+ * O bug: a parcela 1 usava a data da compra e as seguintes o mês da FATURA.
+ * Como uma compra feita depois do fechamento já cai na fatura do mês seguinte,
+ * toda parcela após a primeira ganhava um mês a mais, deixando um mês inteiro
+ * zerado no resumo de gastos e outro inflado.
+ *
+ * Roda uma vez por aparelho, sozinha, na primeira abertura depois da
+ * atualização. Só mexe em `date`; valor, categoria e mês da fatura ficam como
+ * estão, porque a fatura sempre esteve certa.
+ */
+db.version(2)
+  // O schema tem de ser repetido INTEIRO. `.stores({})` nao significa "nada
+  // muda": significa "esta versao nao tem tabela nenhuma", e o Dexie apaga
+  // todas elas. Custou um banco zerado em teste para descobrir.
+  .stores({
+    transactions: 'id, date, categoryId, accountId, type, cardId, invoiceMonth, purchaseId, goalId',
+    categories: 'id, kind, archived',
+    accounts: 'id, kind, archived',
+    cards: 'id, accountId',
+    budgets: 'categoryId',
+    goals: 'id, done',
+    bills: 'id, active, dueDay',
+    shortcuts: 'id, uses',
+    invoicePayments: 'key, cardId',
+    settings: 'key',
+  })
+  .upgrade(async (tx) => {
+    const tabela = tx.table<Transaction, string>('transactions')
+    const correcoes = corrigirParcelas(await tabela.toArray())
+    for (const c of correcoes) await tabela.update(c.id, { date: c.para })
+    if (correcoes.length) {
+      console.info(`[financeo] ${correcoes.length} parcela(s) com data corrigida`)
+    }
+  })
 
 export const uid = () => crypto.randomUUID()
 

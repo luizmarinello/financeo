@@ -1,6 +1,7 @@
-import { db, uid, type ISODate, type Kind, type Transaction } from '../db'
-import { addMonths, dateIn, dayOf, invoiceFor, monthOf } from '../dates'
+import { db, uid, type Kind, type Transaction } from '../db'
+import { addMonths, invoiceFor, monthOf } from '../dates'
 import { splitInstallments } from '../money'
+import { installmentDates } from './installments'
 
 export interface NewEntry {
   type: Kind
@@ -14,21 +15,6 @@ export interface NewEntry {
   /** 1 = à vista */
   installments?: number
   goalId?: string
-}
-
-/**
- * Quando cada parcela pesa no seu mês: a parcela N cai N meses depois da
- * compra, mantendo o dia.
- *
- * Não confundir com o mês da FATURA, que pode estar deslocado: comprar dia 22
- * num cartão que fechou dia 20 gera parcelas em set/out/nov, mas faturas em
- * out/nov/dez. Usar o mês da fatura como data faz a segunda parcela pular um
- * mês e deixa um mês inteiro zerado no resumo de gastos.
- */
-export function installmentDates(purchase: ISODate, n: number): ISODate[] {
-  const mes = monthOf(purchase)
-  const dia = dayOf(purchase)
-  return Array.from({ length: n }, (_, i) => dateIn(addMonths(mes, i), dia))
 }
 
 /**
