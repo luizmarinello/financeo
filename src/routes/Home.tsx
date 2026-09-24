@@ -58,6 +58,14 @@ export default function Home() {
     .slice(0, 5)
   const catName = (id: string) => data.categories.find((c) => c.id === id)?.name ?? '—'
 
+  // Vazio tem dois motivos bem diferentes: nunca lancei nada, ou lancei em
+  // outro mes. Dizer "nada lancado ainda" no segundo caso e mentira, e foi
+  // assim que o cartao pareceu quebrado depois que a Home ganhou seletor de mes.
+  const ultimoLancamento = data.txs
+    .filter((t) => t.date <= hoje)
+    .reduce<string | null>((maior, t) => (!maior || t.date > maior ? t.date : maior), null)
+  const mesDoUltimo = ultimoLancamento ? monthOf(ultimoLancamento) : null
+
   return (
     <>
       <div style={{ padding: 'max(env(safe-area-inset-top), 0.75rem) 0 0.75rem' }}>
@@ -128,13 +136,20 @@ export default function Home() {
       )}
 
       <Card title={mesCorrente ? 'Últimos lançamentos' : `Lançamentos de ${monthLabel(month, true)}`}>
-        {recent.length === 0 && (
-          <p className="muted">
-            {mesCorrente
-              ? 'Nada lançado ainda. Toque no + para começar.'
-              : 'Nenhum lançamento neste mês.'}
-          </p>
-        )}
+        {recent.length === 0 &&
+          (mesDoUltimo && mesDoUltimo !== month ? (
+            <>
+              <p className="muted" style={{ marginTop: 0 }}>
+                Nenhum lançamento em {monthLabel(month, true)}. O último foi em{' '}
+                {dateLabel(ultimoLancamento!)}.
+              </p>
+              <button className="btn sm" onClick={() => setMonth(mesDoUltimo)}>
+                Ver {monthLabel(mesDoUltimo, true)}
+              </button>
+            </>
+          ) : (
+            <p className="muted">Nada lançado ainda. Toque no + para começar.</p>
+          ))}
         {recent.map((t) => (
           <div className="row" key={t.id}>
             <div className="grow" style={{ overflow: 'hidden' }}>

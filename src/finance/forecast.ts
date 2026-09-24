@@ -75,6 +75,7 @@ export function forecast(input: ForecastInput): ForecastMonth[] {
 
     for (const b of bills) {
       if (!b.active) continue
+      if (b.untilMonth && month > b.untilMonth) continue // parcelamento terminou
       const due = dateIn(month, b.dueDay)
       if (!future && (due < from || b.lastPaidMonth === month)) continue
       if (b.type === 'income') incomeCents += b.amountCents

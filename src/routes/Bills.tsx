@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { byName, db, uid, type Bill, type Kind } from '../db'
-import { dateIn, dateLabel, daysBetween, thisMonth, today } from '../dates'
+import { dateIn, dateLabel, daysBetween, monthLabel, thisMonth, today } from '../dates'
 import { formatMoney } from '../money'
 import { addEntry } from '../finance/tx'
 import { checkBudgetAlerts, syncScheduleSoon } from '../notify'
@@ -15,6 +15,7 @@ const BLANK = {
   categoryId: '',
   accountId: '',
   notifyDaysBefore: 3,
+  untilMonth: '',
 }
 
 export default function Bills() {
@@ -46,7 +47,7 @@ export default function Bills() {
     setForm(
       bill === 'new'
         ? { ...BLANK, categoryId: categories.find((c) => c.kind === 'expense')?.id ?? '', accountId: accounts[0]?.id ?? '' }
-        : { ...bill },
+        : { ...bill, untilMonth: bill.untilMonth ?? '' },
     )
   }
 
@@ -61,6 +62,7 @@ export default function Bills() {
       categoryId: form.categoryId,
       accountId: form.accountId,
       notifyDaysBefore: Math.min(30, Math.max(0, form.notifyDaysBefore)),
+      untilMonth: form.untilMonth || undefined,
     }
     if (editing === 'new') await db.bills.add({ id: uid(), active: 1, ...base })
     else if (editing) await db.bills.update(editing.id, base)
@@ -87,6 +89,7 @@ export default function Bills() {
     const due = dateIn(month, b.dueDay)
     const left = daysBetween(today(), due)
     const settled = b.lastPaidMonth === month
+    const encerrada = !!b.untilMonth && month > b.untilMonth
     const late = !settled && left < 0
     return (
       <div className="row" key={b.id}>
@@ -98,6 +101,7 @@ export default function Bills() {
           >
             {b.name}
             {!b.active && ' (pausada)'}
+            {encerrada && ' (encerrada)'}
           </button>
           <div className={`muted ${late ? 'expense' : ''}`}>
             dia {b.dueDay} ·{' '}
@@ -109,12 +113,13 @@ export default function Bills() {
                   ? 'vence hoje'
                   : `em ${left} dias`}{' '}
             · avisa {b.notifyDaysBefore}d antes · {catName(b.categoryId)}
+            {b.untilMonth ? ` · até ${monthLabel(b.untilMonth)}` : ''}
           </div>
         </div>
         <span className={`num ${b.type === 'income' ? 'income' : ''}`}>
           {formatMoney(b.amountCents)}
         </span>
-        {!settled && b.active === 1 && (
+        {!settled && b.active === 1 && !encerrada && (
           <button className="btn sm" onClick={() => settle(b)}>
             {b.type === 'income' ? 'Recebi' : 'Paguei'}
           </button>
@@ -200,6 +205,16 @@ export default function Bills() {
               />
             </div>
           </div>
+
+          <label>Repetir até (opcional)</label>
+          <input
+            type="month"
+            value={form.untilMonth}
+            onChange={(e) => setForm({ ...form, untilMonth: e.target.value })}
+          />
+          <p className="muted" style={{ marginTop: '0.375rem' }}>
+            Para compra parcelada: o mês da última parcela. Em branco, repete sem fim.
+          </p>
 
           <label>Categoria</label>
           <select

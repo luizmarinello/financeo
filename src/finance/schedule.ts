@@ -33,6 +33,7 @@ export async function buildSchedule(from = today()): Promise<Reminder[]> {
   for (const month of months) {
     for (const b of bills) {
       if (b.type === 'income' || b.lastPaidMonth === month) continue
+      if (b.untilMonth && month > b.untilMonth) continue // nao lembra de conta encerrada
       out.push(billReminder(b, month))
     }
     for (const card of cards) {

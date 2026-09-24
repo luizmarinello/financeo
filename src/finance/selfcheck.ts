@@ -397,6 +397,28 @@ const tx = (o: Partial<Transaction>): Transaction => ({
     'a conta fixa de 180000 ja cobre o limite de 100000 da mesma categoria',
   )
 
+  // conta com fim (compra parcelada) para de pesar depois do ultimo mes
+  const parcelado = {
+    ...aluguel,
+    id: 'b3',
+    name: 'Parcela',
+    amountCents: 40000,
+    dueDay: 10,
+    untilMonth: '2025-04',
+  }
+  const comFim = forecast({ ...base, from: '2025-03-01', bills: [parcelado] })
+  assert.equal(comFim[0].billsCents, 40000, 'marco: dentro do prazo')
+  assert.equal(comFim[1].billsCents, 40000, 'abril: ultimo mes ainda cobra')
+  assert.equal(comFim[2].billsCents, 0, 'maio: acabou, nao cobra mais')
+
+  // sem untilMonth, continua para sempre (comportamento antigo preservado)
+  const semFim = forecast({
+    ...base,
+    from: '2025-03-01',
+    bills: [{ ...parcelado, untilMonth: undefined }],
+  })
+  assert.equal(semFim[2].billsCents, 40000)
+
   // aporte planejado em meta desconta da projeção
   const comMeta = forecast({
     ...base,

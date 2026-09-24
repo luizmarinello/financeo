@@ -82,6 +82,12 @@ export interface Bill {
   active: 0 | 1
   /** 'YYYY-MM' da última vez que foi quitada; evita contar duas vezes */
   lastPaidMonth?: string
+  /**
+   * 'YYYY-MM' do último mês em que cobra. Para compra parcelada: sem isto a
+   * recorrência segue para sempre e a previsão ganha uma despesa que não
+   * existe mais.
+   */
+  untilMonth?: string
 }
 
 /** Lançamento favorito, disparável em um toque. */
