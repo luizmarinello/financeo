@@ -36,6 +36,10 @@ export default function Forecast() {
             <span className="num expense">−{formatMoney(m.invoiceCents)}</span>
           </div>
           <div className="row">
+            <span className="grow">Limites de gasto</span>
+            <span className="num expense">−{formatMoney(m.budgetCents)}</span>
+          </div>
+          <div className="row">
             <span className="grow">Aportes planejados</span>
             <span className="num expense">−{formatMoney(m.goalsCents)}</span>
           </div>
@@ -51,9 +55,10 @@ export default function Forecast() {
       ))}
 
       <p className="muted">
-        Parte do saldo de hoje e soma o que ainda está por vir: contas fixas cadastradas, parcelas
-        que já caíram em faturas futuras e o que você planejou aportar nas metas. O mês corrente só
-        conta o que ainda não venceu.
+        Parte do saldo de hoje e soma o que ainda está por vir: contas fixas, parcelas que já
+        caíram em faturas futuras, os limites de gasto que você definiu no orçamento e o que
+        planejou aportar nas metas. O mês corrente só conta o que ainda não venceu, e o limite de
+        gasto só reserva o que ainda não foi gasto.
       </p>
       <div className="field-row">
         <Link to="/contas" className="btn">

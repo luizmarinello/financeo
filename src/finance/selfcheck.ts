@@ -305,6 +305,7 @@ const tx = (o: Partial<Transaction>): Transaction => ({
     bills: [aluguel, salario],
     goals: [] as Goal[],
     cards,
+    budgets: [] as Budget[],
     invoiceTotals,
     months: ['2025-03', '2025-04', '2025-05'],
   }
@@ -353,6 +354,48 @@ const tx = (o: Partial<Transaction>): Transaction => ({
   })
   assert.equal(quitado[0].billsCents, 0)
   assert.equal(quitado[1].billsCents, 180000)
+
+  // limite de gasto desconta da projeção: sem isto a previsão só enxerga
+  // conta fixa e promete uma sobra que nao existe
+  // c5 nao tem conta fixa: o limite entra inteiro
+  const comLimite = forecast({
+    ...base,
+    from: '2025-03-01',
+    budgets: [{ categoryId: 'c5', limitCents: 100000 }],
+  })
+  assert.equal(comLimite[1].budgetCents, 100000, 'mes futuro reserva o limite inteiro')
+  assert.equal(comLimite[1].endCents, f[1].endCents - 200000, 'dois meses futuros descontados')
+
+  // no mes corrente, so o que ainda nao foi gasto continua reservado
+  const meioGasto = forecast({
+    ...base,
+    from: '2025-03-01',
+    txs: [tx({ categoryId: 'c5', amountCents: 70000, date: '2025-03-05' })],
+    budgets: [{ categoryId: 'c5', limitCents: 100000 }],
+  })
+  assert.equal(meioGasto[0].budgetCents, 30000, 'gastou 70000 de 100000, restam 30000 reservados')
+
+  // estourou o limite: nao reserva negativo
+  const estourado = forecast({
+    ...base,
+    from: '2025-03-01',
+    txs: [tx({ categoryId: 'c5', amountCents: 150000, date: '2025-03-05' })],
+    budgets: [{ categoryId: 'c5', limitCents: 100000 }],
+  })
+  assert.equal(estourado[0].budgetCents, 0)
+
+  // conta fixa e limite na MESMA categoria nao somam duas vezes
+  const semDuplicar = forecast({
+    ...base,
+    from: '2025-03-01',
+    bills: [aluguel, salario], // aluguel: 180000 na categoria c1
+    budgets: [{ categoryId: 'c1', limitCents: 100000 }],
+  })
+  assert.equal(
+    semDuplicar[1].budgetCents,
+    0,
+    'a conta fixa de 180000 ja cobre o limite de 100000 da mesma categoria',
+  )
 
   // aporte planejado em meta desconta da projeção
   const comMeta = forecast({
