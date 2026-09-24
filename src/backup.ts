@@ -39,12 +39,38 @@ export interface ImportResult {
   rows: number
 }
 
+/** O que o arquivo traz, para mostrar ANTES de substituir qualquer coisa. */
+export interface ResumoDoBackup {
+  rows: number
+  exportadoEm?: string
+  /** só as tabelas que vieram com conteúdo, para caber na tela */
+  porTabela: Array<{ tabela: string; total: number }>
+}
+
+const ROTULOS: Record<string, string> = {
+  transactions: 'lançamentos',
+  categories: 'categorias',
+  accounts: 'formas de pagamento',
+  cards: 'cartões',
+  budgets: 'limites de gasto',
+  goals: 'metas',
+  bills: 'contas fixas',
+  shortcuts: 'atalhos',
+  invoicePayments: 'faturas pagas',
+}
+
 /**
- * Substitui tudo pelo conteúdo do arquivo. Valida antes de apagar qualquer
- * coisa — um JSON errado não pode levar o histórico junto.
+ * Lê e valida sem tocar no banco. Separado de propósito: importar substitui
+ * TUDO, então é preciso poder mostrar o que veio antes de apagar o que existe.
+ * Vale mais ainda para arquivo que chegou de fora, pelo compartilhamento.
  */
-export async function importBackup(file: File): Promise<ImportResult> {
-  const parsed: unknown = JSON.parse(await file.text())
+export function lerBackup(texto: string): { data: Backup['data']; resumo: ResumoDoBackup } {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(texto)
+  } catch {
+    throw new Error('O arquivo não é um JSON válido.')
+  }
   if (
     !parsed ||
     typeof parsed !== 'object' ||
@@ -53,22 +79,40 @@ export async function importBackup(file: File): Promise<ImportResult> {
   ) {
     throw new Error('Arquivo não é um backup deste app.')
   }
-  const { data } = parsed as Backup
+  const { data, exportedAt } = parsed as Backup
 
   let rows = 0
+  const porTabela: ResumoDoBackup['porTabela'] = []
   for (const name of TABLES) {
     const list = data[name]
     if (list !== undefined && !Array.isArray(list)) throw new Error(`Tabela "${name}" corrompida.`)
-    rows += list?.length ?? 0
+    const total = list?.length ?? 0
+    rows += total
+    if (total) porTabela.push({ tabela: ROTULOS[name] ?? name, total })
   }
+  if (!rows) throw new Error('O backup está vazio.')
 
+  return { data, resumo: { rows, exportadoEm: exportedAt, porTabela } }
+}
+
+/** Substitui tudo. Só chame depois de `lerBackup` e de confirmar com o usuário. */
+export async function aplicarBackup(data: Backup['data']): Promise<ImportResult> {
+  let rows = 0
   await db.transaction('rw', TABLES.map((t) => db.table(t)), async () => {
     for (const name of TABLES) {
       await db.table(name).clear()
       const list = data[name]
-      if (list?.length) await db.table(name).bulkAdd(list)
+      if (list?.length) {
+        await db.table(name).bulkAdd(list)
+        rows += list.length
+      }
     }
   })
-
   return { rows }
+}
+
+/** Caminho do botão Importar: lê, valida e grava de uma vez. */
+export async function importBackup(file: File): Promise<ImportResult> {
+  const { data } = lerBackup(await file.text())
+  return aplicarBackup(data)
 }

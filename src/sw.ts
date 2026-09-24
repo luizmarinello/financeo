@@ -15,6 +15,49 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim())
 })
 
+/**
+ * Recebe arquivo vindo do "Compartilhar" do Android (Web Share Target).
+ *
+ * O destino declarado no manifest é um POST, que não existe no GitHub Pages:
+ * quem responde é este handler, antes de ir para a rede. Ele guarda o conteúdo
+ * num cache temporário e redireciona para a tela de importar, que mostra o que
+ * veio e pede confirmação — importar substitui todos os dados, então nada aqui
+ * grava nada sozinho.
+ */
+const CACHE_COMPARTILHADO = 'financeo-compartilhado'
+const ARQUIVO_COMPARTILHADO = 'arquivo-recebido'
+
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url)
+  const ehCompartilhamento =
+    event.request.method === 'POST' && url.pathname.endsWith('/importar')
+  if (!ehCompartilhamento) return
+
+  event.respondWith(
+    (async () => {
+      const destino = new URL(self.registration.scope)
+      try {
+        const form = await event.request.formData()
+        const arquivo = form.get('arquivo')
+        if (!(arquivo instanceof File)) throw new Error('sem arquivo')
+
+        const cache = await caches.open(CACHE_COMPARTILHADO)
+        await cache.put(
+          ARQUIVO_COMPARTILHADO,
+          new Response(await arquivo.text(), {
+            headers: { 'content-type': 'application/json', 'x-nome': arquivo.name || 'backup.json' },
+          }),
+        )
+        destino.hash = '#/importar'
+      } catch {
+        destino.hash = '#/importar?erro=1'
+      }
+      // 303: o navegador troca o POST por um GET na tela de destino
+      return Response.redirect(destino.href, 303)
+    })(),
+  )
+})
+
 interface PushPayload {
   title?: string
   body?: string

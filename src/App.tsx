@@ -11,6 +11,7 @@ import Categories from './routes/Categories'
 import Accounts from './routes/Accounts'
 import Forecast from './routes/Forecast'
 import Settings from './routes/Settings'
+import Import from './routes/Import'
 
 const NAV = [
   { to: '/', label: 'Início', d: 'M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z' },
@@ -23,7 +24,7 @@ const NAV = [
 export default function App() {
   const nav = useNavigate()
   const { pathname } = useLocation()
-  const showFab = pathname !== '/lancar'
+  const showFab = pathname !== '/lancar' && pathname !== '/importar'
 
   return (
     <>
@@ -41,6 +42,8 @@ export default function App() {
           <Route path="/formas-de-pagamento" element={<Accounts />} />
           <Route path="/previsao" element={<Forecast />} />
           <Route path="/ajustes" element={<Settings />} />
+          {/* destino do "Compartilhar" do Android; ver share_target no manifest */}
+          <Route path="/importar" element={<Import />} />
           <Route path="*" element={<Home />} />
         </Routes>
       </div>
