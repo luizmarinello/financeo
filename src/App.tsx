@@ -1,4 +1,4 @@
-import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import Home from './routes/Home'
 import Add from './routes/Add'
 import History from './routes/History'
@@ -24,6 +24,9 @@ const NAV = [
 export default function App() {
   const nav = useNavigate()
   const { pathname } = useLocation()
+  const [params] = useSearchParams()
+  // lançar a partir de um mês aberto cai naquele mês, não em hoje
+  const mes = params.get('mes')
   const showFab = pathname !== '/lancar' && pathname !== '/importar'
 
   return (
@@ -49,7 +52,11 @@ export default function App() {
       </div>
 
       {showFab && (
-        <button className="fab" onClick={() => nav('/lancar')} aria-label="Novo lançamento">
+        <button
+          className="fab"
+          onClick={() => nav(mes ? `/lancar?mes=${mes}` : '/lancar')}
+          aria-label="Novo lançamento"
+        >
           +
         </button>
       )}

@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { byName, db, uid, type Kind } from '../db'
-import { today } from '../dates'
+import { dateIn, dateLabel, dayOf, thisMonth, today } from '../dates'
 import { formatMoney, splitInstallments } from '../money'
-import { addEntry } from '../finance/tx'
+import { addEntry, removeEntry, updateEntry } from '../finance/tx'
 import { defaultsFor, lastAmountFor } from '../finance/suggest'
 import { checkBudgetAlerts, syncScheduleSoon } from '../notify'
 import { Chips, MoneyField, Segmented, Topbar } from '../components/ui'
@@ -18,12 +18,21 @@ export default function Add() {
   const nav = useNavigate()
   const [params] = useSearchParams()
   const goalId = params.get('meta') ?? undefined
+  const editId = params.get('id') ?? undefined
+  // mês que estava aberto na tela de onde vim: lançar dali deve cair nele,
+  // não em hoje. Mantém o dia de hoje quando ele existe naquele mês.
+  const mesAlvo = params.get('mes') || thisMonth()
+
+  const original = useLiveQuery(() => (editId ? db.transactions.get(editId) : undefined), [editId])
+  const editando = Boolean(editId)
+  const ehParcela = Boolean(original?.purchaseId)
+  const [prefilled, setPrefilled] = useState(false)
 
   const [type, setType] = useState<Kind>('expense')
   const [amountCents, setAmount] = useState(0)
   const [categoryId, setCategory] = useState<string>()
   const [accountId, setAccount] = useState<string>()
-  const [date, setDate] = useState(today())
+  const [date, setDate] = useState(() => dateIn(mesAlvo, dayOf(today())))
   const [description, setDescription] = useState('')
   const [cardId, setCard] = useState<string>()
   const [installments, setInstallments] = useState(1)
@@ -65,8 +74,22 @@ export default function Add() {
     [cards, accountId],
   )
 
+  // modo edição: carrega o lançamento uma vez e para de sugerir nada
+  useEffect(() => {
+    if (!original || prefilled) return
+    setType(original.type)
+    setAmount(original.amountCents)
+    setCategory(original.categoryId)
+    setAccount(original.accountId)
+    setDate(original.date)
+    setDescription(original.description ?? '')
+    setCard(original.cardId)
+    setPrefilled(true)
+  }, [original, prefilled])
+
   // pré-seleção pelo histórico recente
   useEffect(() => {
+    if (editando) return
     let alive = true
     defaultsFor(type).then((d) => {
       if (!alive) return
@@ -87,6 +110,7 @@ export default function Add() {
 
   // conta que não é cartão não tem parcela
   useEffect(() => {
+    if (editando && !prefilled) return
     if (!isCredit) {
       setCard(undefined)
       setInstallments(1)
@@ -97,7 +121,7 @@ export default function Add() {
 
   // sugestão de valor: último lançamento daquela categoria
   useEffect(() => {
-    if (!categoryId || amountCents > 0) {
+    if (editando || !categoryId || amountCents > 0) {
       setSuggestion(null)
       return
     }
@@ -120,7 +144,7 @@ export default function Add() {
     if (!canSave) return
     setSaving(true)
     try {
-      await addEntry({
+      const entrada = {
         type,
         amountCents,
         categoryId: categoryId!,
@@ -130,7 +154,9 @@ export default function Add() {
         cardId: isCredit ? cardId : undefined,
         installments: isCredit ? installments : 1,
         goalId,
-      })
+      }
+      if (editId) await updateEntry(editId, entrada)
+      else await addEntry(entrada)
       // usa o atalho equivalente, se existir, para ele subir na lista
       const used = shortcuts.find(
         (s) => s.label === description && s.categoryId === categoryId && s.type === type,
@@ -165,7 +191,7 @@ export default function Add() {
   return (
     <>
       <Topbar
-        title={goal ? `Aporte: ${goal.name}` : 'Lançar'}
+        title={editando ? 'Editar lançamento' : goal ? `Aporte: ${goal.name}` : 'Lançar'}
         right={
           <button className="btn sm ghost" onClick={goBack}>
             Cancelar
@@ -173,7 +199,7 @@ export default function Add() {
         }
       />
 
-      {!goal && shortcuts.length > 0 && (
+      {!goal && !editando && shortcuts.length > 0 && (
         <div className="card">
           <h2>Atalhos</h2>
           <div className="chips">
@@ -233,7 +259,7 @@ export default function Add() {
                 ))}
               </select>
             </div>
-            <div>
+            <div style={{ display: editando ? 'none' : undefined }}>
               <label>Parcelas</label>
               <select
                 value={installments}
@@ -247,6 +273,14 @@ export default function Add() {
               </select>
             </div>
           </div>
+        )}
+
+        {editando && ehParcela && (
+          <p className="muted">
+            Parcela {original?.installmentN} de {original?.installmentOf}. Editar aqui muda só esta
+            parcela; as outras continuam como estão. Para mudar o valor total ou o número de
+            parcelas, apague a compra e lance de novo.
+          </p>
         )}
 
         {parcelaPreview !== null && (
@@ -275,10 +309,33 @@ export default function Add() {
         {saving ? 'Salvando…' : 'Salvar'}
       </button>
 
-      {!goal && canSave && (
+      {!goal && !editando && canSave && (
         <button className="btn ghost" style={{ width: '100%', marginTop: 8 }} onClick={saveAsShortcut}>
           Salvar como atalho
         </button>
+      )}
+
+      {editando && original && (
+        <>
+          <button
+            className="btn ghost danger"
+            style={{ width: '100%', marginTop: 8 }}
+            onClick={async () => {
+              const aviso = ehParcela
+                ? `Apagar as ${original.installmentOf} parcelas desta compra?`
+                : 'Apagar este lançamento?'
+              if (!confirm(aviso)) return
+              await removeEntry(original.id)
+              syncScheduleSoon()
+              goBack()
+            }}
+          >
+            {ehParcela ? `Apagar as ${original.installmentOf} parcelas` : 'Apagar lançamento'}
+          </button>
+          <p className="muted" style={{ textAlign: 'center' }}>
+            Lançado em {dateLabel(original.date)}
+          </p>
+        </>
       )}
     </>
   )

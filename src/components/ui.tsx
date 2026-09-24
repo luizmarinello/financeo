@@ -1,6 +1,26 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { addMonths, monthLabel, thisMonth, type Month } from '../dates'
 import { formatMoney, parseMoney } from '../money'
+
+/**
+ * Mês da tela, guardado na URL (`?mes=2026-10`).
+ *
+ * Fica na URL e não em estado local por dois motivos: o botão voltar do
+ * celular passa a andar entre os meses, e o botão de lançar consegue ler qual
+ * mês você estava vendo para jogar o lançamento nele.
+ */
+export function useMonthParam(): [Month, (m: Month) => void] {
+  const [params, setParams] = useSearchParams()
+  const month = params.get('mes') || thisMonth()
+  const setMonth = (m: Month) => {
+    const next = new URLSearchParams(params)
+    if (m === thisMonth()) next.delete('mes')
+    else next.set('mes', m)
+    setParams(next, { replace: true })
+  }
+  return [month, setMonth]
+}
 
 export function Topbar({ title, right }: { title: string; right?: ReactNode }) {
   return (

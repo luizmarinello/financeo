@@ -65,6 +65,33 @@ export async function addEntry(e: NewEntry): Promise<string[]> {
   return rows.map((r) => r.id)
 }
 
+/**
+ * Altera um lançamento que já existe.
+ *
+ * Numa compra parcelada mexe SÓ na parcela aberta: as irmãs ficam como estão.
+ * Mudar o valor total ou o número de parcelas exige apagar a compra e lançar
+ * de novo, senão seria preciso adivinhar como redistribuir o que já passou.
+ */
+export async function updateEntry(id: string, e: NewEntry): Promise<void> {
+  const atual = await db.transactions.get(id)
+  if (!atual) return
+  const card = e.cardId ? await db.cards.get(e.cardId) : undefined
+
+  await db.transactions.put({
+    ...atual,
+    type: e.type,
+    amountCents: e.amountCents,
+    categoryId: e.categoryId,
+    accountId: e.accountId,
+    date: e.date,
+    description: e.description?.trim() || undefined,
+    // deixou de ser cartão: a fatura antiga não pode ficar pendurada
+    cardId: card ? e.cardId : undefined,
+    invoiceMonth: card ? invoiceFor(e.date, card).month : undefined,
+    goalId: e.goalId ?? atual.goalId,
+  })
+}
+
 /** Apaga o lançamento — e todas as parcelas irmãs, se for compra parcelada. */
 export async function removeEntry(id: string) {
   const t = await db.transactions.get(id)

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { db } from '../db'
@@ -9,10 +9,10 @@ import { budgetStatus } from '../finance/budget'
 import { invoiceTotalsByKey } from '../finance/invoice'
 import { invoiceDueDate } from '../dates'
 import { syncScheduleSoon } from '../notify'
-import { Card, Money, MonthNav, Progress } from '../components/ui'
+import { Card, Money, MonthNav, Progress, useMonthParam } from '../components/ui'
 
 export default function Home() {
-  const [month, setMonth] = useState(thisMonth())
+  const [month, setMonth] = useMonthParam()
   const mesCorrente = month === thisMonth()
 
   // a agenda de lembretes pode ter mudado por conta do tempo passar
@@ -151,7 +151,12 @@ export default function Home() {
             <p className="muted">Nada lançado ainda. Toque no + para começar.</p>
           ))}
         {recent.map((t) => (
-          <div className="row" key={t.id}>
+          <Link
+            className="row"
+            to={`/lancar?id=${t.id}`}
+            key={t.id}
+            style={{ color: 'inherit' }}
+          >
             <div className="grow" style={{ overflow: 'hidden' }}>
               <div className="ellipsis">{t.description || catName(t.categoryId)}</div>
               <div className="muted ellipsis">
@@ -161,7 +166,7 @@ export default function Home() {
               </div>
             </div>
             <Money cents={t.type === 'income' ? t.amountCents : -t.amountCents} signed />
-          </div>
+          </Link>
         ))}
         {recent.length > 0 && (
           <Link to="/historico" className="muted" style={{ display: 'block', marginTop: 10 }}>

@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useNavigate } from 'react-router-dom'
 import { byName, db } from '../db'
-import { dateLabel, thisMonth } from '../dates'
+import { dateLabel } from '../dates'
 import { formatMoney } from '../money'
 import { entriesOfMonth, removeEntry } from '../finance/tx'
 import { syncScheduleSoon } from '../notify'
-import { Card, Empty, Money, MonthNav, Sheet, Topbar } from '../components/ui'
+import { Card, Empty, Money, MonthNav, Sheet, Topbar, useMonthParam } from '../components/ui'
 
 export default function History() {
-  const [month, setMonth] = useState(thisMonth())
+  const nav = useNavigate()
+  const [month, setMonth] = useMonthParam()
   const [q, setQ] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [accountId, setAccountId] = useState('')
@@ -140,17 +142,21 @@ export default function History() {
           {current.installmentOf && (
             <p className="muted">Apagar remove as {current.installmentOf} parcelas da compra.</p>
           )}
-          <button
-            className="btn danger"
-            style={{ width: '100%' }}
-            onClick={async () => {
-              await removeEntry(current.id)
-              syncScheduleSoon()
-              setSelected(null)
-            }}
-          >
-            Apagar
-          </button>
+          <div className="field-row">
+            <button className="btn" onClick={() => nav(`/lancar?id=${current.id}`)}>
+              Editar
+            </button>
+            <button
+              className="btn danger"
+              onClick={async () => {
+                await removeEntry(current.id)
+                syncScheduleSoon()
+                setSelected(null)
+              }}
+            >
+              Apagar
+            </button>
+          </div>
         </Sheet>
       )}
     </>
