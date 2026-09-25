@@ -213,6 +213,47 @@ const tx = (o: Partial<Transaction>): Transaction => ({
   assert.equal(monthSummary(txs, '2025-04').expenseCents, 0, 'outro mês não vaza')
 }
 
+// ---------- saldo nao conta o que ainda nao aconteceu ----------
+// Bug real: lancamento com data futura era descontado do "Disponivel hoje", e
+// a previsao somava o mesmo gasto de novo ao chegar no mes dele.
+{
+  const txs = [
+    tx({ type: 'income', amountCents: 400000, accountId: 'a2', date: '2025-03-05' }),
+    tx({ amountCents: 160000, accountId: 'a2', date: '2025-04-05' }), // mes que vem
+  ]
+  const hojeSaldo = totalLiquid(balances(accounts, txs, [], '2025-03-10'))
+  assert.equal(hojeSaldo, 250000 + 400000, 'gasto de abril nao pode sair do saldo de marco')
+
+  const depois = totalLiquid(balances(accounts, txs, [], '2025-04-30'))
+  assert.equal(depois, 250000 + 400000 - 160000, 'passada a data, ai sim entra')
+
+  // pagamento de fatura futuro tambem espera a data
+  const comFatura = totalLiquid(
+    balances(accounts, [], [
+      { key: 'c:2025-04', cardId: 'c', invoiceMonth: '2025-04', paidAt: '2025-04-05', amountCents: 50000, accountId: 'a2' },
+    ], '2025-03-10'),
+  )
+  assert.equal(comFatura, 250000)
+
+  // e a previsao nao conta duas vezes: o saldo de partida ignora abril,
+  // entao abril aparece uma vez so, dentro do mes
+  const f = forecast({
+    accounts,
+    txs,
+    payments: [],
+    bills: [],
+    goals: [],
+    cards: [],
+    budgets: [],
+    invoiceTotals: new Map(),
+    months: ['2025-03', '2025-04'],
+    from: '2025-03-10',
+  })
+  assert.equal(f[0].endCents, 650000, 'marco: saldo de hoje, sem o gasto de abril')
+  assert.equal(f[1].billsCents, 160000, 'abril conta o gasto uma vez')
+  assert.equal(f[1].endCents, 650000 - 160000, 'e so uma vez')
+}
+
 // ---------- orçamento ----------
 {
   const cats: Category[] = [

@@ -55,7 +55,9 @@ export function forecast(input: ForecastInput): ForecastMonth[] {
   const paid = new Set(payments.map((p) => p.key))
   const creditAccounts = new Set(accounts.filter((a) => a.kind === 'credit').map((a) => a.id))
 
-  let running = totalLiquid(balances(accounts, txs, payments))
+  // saldo em `from`: o que vem depois e somado mes a mes abaixo, e contar
+  // aqui tambem seria contar duas vezes
+  let running = totalLiquid(balances(accounts, txs, payments, from))
 
   // gasto já realizado no mês corrente, por categoria: o orçamento só reserva
   // o que ainda não foi gasto
