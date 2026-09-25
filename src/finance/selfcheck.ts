@@ -407,6 +407,32 @@ const tx = (o: Partial<Transaction>): Transaction => ({
   assert.equal(comLimite[1].budgetCents, 100000, 'mes futuro reserva o limite inteiro')
   assert.equal(comLimite[1].endCents, f[1].endCents - 200000, 'dois meses futuros descontados')
 
+  // no mes corrente o limite e proporcional aos dias que faltam: entrar no
+  // app no fim do mes nao pode reservar um mes inteiro de mercado
+  const fimDoMes = forecast({
+    ...base,
+    from: '2025-03-25', // faltam 7 dias de 31
+    budgets: [{ categoryId: 'c5', limitCents: 310000 }],
+  })
+  assert.equal(fimDoMes[0].budgetCents, 70000, '310000 * 7/31')
+  assert.equal(fimDoMes[1].budgetCents, 310000, 'mes seguinte reserva inteiro')
+
+  const inicioDoMes = forecast({
+    ...base,
+    from: '2025-03-01',
+    budgets: [{ categoryId: 'c5', limitCents: 310000 }],
+  })
+  assert.equal(inicioDoMes[0].budgetCents, 310000, 'dia 1: mes inteiro pela frente')
+
+  // ja gastou quase tudo: reserva o que sobrou, nao a proporcao
+  const quaseGasto = forecast({
+    ...base,
+    from: '2025-03-01',
+    txs: [tx({ categoryId: 'c5', amountCents: 300000, date: '2025-03-01' })],
+    budgets: [{ categoryId: 'c5', limitCents: 310000 }],
+  })
+  assert.equal(quaseGasto[0].budgetCents, 10000, 'sobra do limite manda quando e menor')
+
   // no mes corrente, so o que ainda nao foi gasto continua reservado
   const meioGasto = forecast({
     ...base,

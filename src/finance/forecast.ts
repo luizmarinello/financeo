@@ -8,7 +8,7 @@ import {
   type InvoicePayment,
   type Transaction,
 } from '../db'
-import { dateIn, monthOf, monthRange, thisMonth, today, type Month } from '../dates'
+import { dateIn, dayOf, daysInMonth, monthOf, monthRange, thisMonth, today, type Month } from '../dates'
 import { balances, totalLiquid } from './balance'
 import { invoiceTotalsByKey } from './invoice'
 
@@ -110,12 +110,19 @@ export function forecast(input: ForecastInput): ForecastMonth[] {
     // Gasto variável que o orçamento já reservou. Sem isto a previsão só
     // enxerga conta fixa e diz que sobra muito mais do que sobra: quem tem
     // R$ 1.000 de mercado por mês não pode ver esse dinheiro como livre.
+    //
+    // No mês corrente reserva o MENOR entre o que falta gastar e a parte do
+    // limite que ainda cabe nos dias restantes. Entrar no app dia 25 e ver um
+    // mês inteiro de mercado reservado para os últimos 6 dias afundava a
+    // projeção e contaminava todos os meses seguintes.
+    const proporcaoDoMes = future ? 1 : Math.max(0, daysInMonth(month) - dayOf(from) + 1) / daysInMonth(month)
     const budgetCents = budgets.reduce((s, b) => {
       // o que já entrou como conta fixa naquela categoria não conta de novo
       const jaContado = billsPorCategoria.get(b.categoryId) ?? 0
+      const naoGasto = Math.max(0, b.limitCents - (gastoDoMes.get(b.categoryId) ?? 0))
       const reservado = future
         ? b.limitCents
-        : Math.max(0, b.limitCents - (gastoDoMes.get(b.categoryId) ?? 0))
+        : Math.min(naoGasto, Math.round(b.limitCents * proporcaoDoMes))
       return s + Math.max(0, reservado - jaContado)
     }, 0)
 

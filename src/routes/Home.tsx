@@ -66,6 +66,15 @@ export default function Home() {
     .reduce<string | null>((maior, t) => (!maior || t.date > maior ? t.date : maior), null)
   const mesDoUltimo = ultimoLancamento ? monthOf(ultimoLancamento) : null
 
+  // Saldo zerado logo depois de configurar o app quase sempre quer dizer
+  // "ainda não informei quanto tenho", não "estou sem dinheiro". Sem esta
+  // dica a previsão inteira sai deslocada e não há nada na tela explicando.
+  const faltaSaldoInicial =
+    liquid === 0 &&
+    !ultimoLancamento &&
+    data.accounts.every((a) => a.openingCents === 0) &&
+    data.accounts.length > 0
+
   return (
     <>
       <div style={{ padding: 'max(env(safe-area-inset-top), 0.75rem) 0 0.75rem' }}>
@@ -87,6 +96,18 @@ export default function Home() {
             <Money cents={b.cents} />
           </div>
         ))}
+
+        {faltaSaldoInicial && (
+          <>
+            <p className="muted" style={{ marginBottom: '0.5rem' }}>
+              Você ainda não disse quanto tem hoje. Sem isso a previsão parte do zero e todos os
+              meses aparecem negativos.
+            </p>
+            <Link className="btn sm" to="/formas-de-pagamento">
+              Informar meu saldo
+            </Link>
+          </>
+        )}
       </Card>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

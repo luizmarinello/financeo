@@ -58,7 +58,7 @@ export default function Forecast() {
         Parte do saldo de hoje e soma o que ainda está por vir: contas fixas, parcelas que já
         caíram em faturas futuras, os limites de gasto que você definiu no orçamento e o que
         planejou aportar nas metas. O mês corrente só conta o que ainda não venceu, e o limite de
-        gasto só reserva o que ainda não foi gasto.
+        gasto reserva só a parte que cabe nos dias que faltam.
       </p>
       <div className="field-row">
         <Link to="/contas" className="btn">
