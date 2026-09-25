@@ -5,9 +5,11 @@ import { formatMoney } from '../money'
 import { balances } from '../finance/balance'
 import { Card, MoneyField, Sheet, Topbar } from '../components/ui'
 
+// Rótulos do TIPO da conta. Não podem repetir o nome das contas padrão, senão
+// o Vale-alimentação aparece como "Conta / PIX" e parece erro.
 const KIND_LABEL: Record<AccountKind, string> = {
-  cash: 'Espécie',
-  bank: 'Conta / PIX',
+  cash: 'Dinheiro',
+  bank: 'Conta',
   credit: 'Cartão de crédito',
 }
 
@@ -100,8 +102,8 @@ export default function Accounts() {
                 value={form.kind}
                 onChange={(e) => setForm({ ...form, kind: e.target.value as AccountKind })}
               >
-                <option value="bank">Conta / PIX</option>
-                <option value="cash">Espécie</option>
+                <option value="bank">Conta (banco, PIX, vale)</option>
+                <option value="cash">Dinheiro em espécie</option>
               </select>
             </>
           )}
