@@ -19,6 +19,7 @@ import { budgetStatus } from './budget'
 import { forecast } from './forecast'
 import { balances, monthSummary, totalLiquid } from './balance'
 import { goalProgress, suggestedSurplus } from './goals'
+import { compromissos } from './plan'
 import type { Account, Budget, Category, Goal, Transaction } from '../db'
 
 // ---------- datas ----------
@@ -554,6 +555,52 @@ const tx = (o: Partial<Transaction>): Transaction => ({
     [],
     `consulta em campo nao indexado (Dexie lanca SchemaError em runtime): ${problemas.join(' | ')}`,
   )
+}
+
+// ---------- planejamento: comprometido até o fim do mês ----------
+{
+  const acc = (id: string, kind: Account['kind']): Account =>
+    ({ id, name: id, kind, openingCents: 0, archived: 0 })
+  const tx = (date: string, type: 'income' | 'expense', amountCents: number, extra = {}): Transaction =>
+    ({ id: date + amountCents, type, amountCents, categoryId: 'x', accountId: 'b', date, ...extra })
+  const bill = (dueDay: number, type: 'income' | 'expense', amountCents: number, extra = {}) =>
+    ({ id: String(amountCents), name: '', type, amountCents, dueDay, categoryId: 'x', accountId: 'b',
+       notifyDaysBefore: 0, active: 1 as const, ...extra })
+  const card = (id: string) => ({ id, accountId: 'cr', name: id, closingDay: 1, dueDay: 10 })
+
+  const c = compromissos({
+    accounts: [acc('b', 'bank'), acc('cr', 'credit')],
+    txs: [
+      tx('2026-09-10', 'expense', 7_000),                    // passado: já está no saldo
+      tx('2026-09-30', 'expense', 7_100),                    // hoje: já está no saldo
+      tx('2026-10-30', 'expense', 50_000),                   // lançado para depois
+      tx('2026-10-15', 'income', 20_000),
+      tx('2026-10-20', 'expense', 9_000, { accountId: 'cr' }), // cartão sai pela fatura
+      tx('2026-10-21', 'expense', 9_100, { goalId: 'g' }),
+      tx('2026-11-02', 'expense', 9_200),                    // depois da janela
+    ],
+    payments: [{ key: 'c2:2026-10', cardId: 'c2', invoiceMonth: '2026-10', paidAt: '2026-09-29', amountCents: 1, accountId: 'b' }],
+    bills: [
+      bill(5, 'expense', 100_000),
+      bill(5, 'income', 300_000),
+      bill(5, 'expense', 11_000, { untilMonth: '2026-09' }), // parcelamento acabou
+      bill(5, 'expense', 12_000, { lastPaidMonth: '2026-10' }),
+    ],
+    cards: [card('c1'), card('c2')],
+    invoiceTotals: new Map([['c1:2026-10', 80_000], ['c1:2026-09', 99_900], ['c2:2026-10', 5_000]]),
+    plano: [
+      { id: 'p1', label: 'pneu', type: 'expense', amountCents: 120_000 },
+      { id: 'p2', label: 'freela', type: 'income', amountCents: 10_000 },
+    ],
+    hoje: '2026-09-30',
+    ate: '2026-10-31',
+  })
+  assert.equal(c.contasCents, 100_000, 'conta fixa: so a que vence na janela, ativa e nao paga')
+  assert.equal(c.lancadoCents, 50_000, 'lancamento futuro fora do cartao e da meta')
+  assert.equal(c.faturasCents, 80_000, 'fatura vencida ou paga nao compromete')
+  assert.equal(c.planoCents, 120_000)
+  assert.equal(c.aReceberCents, 330_000, 'renda fixa + lancada + planejada')
+  assert.equal(c.comprometidoCents, 350_000)
 }
 
 console.log('✓ todos os checks passaram')

@@ -1,5 +1,6 @@
 import { NavLink, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import Home from './routes/Home'
+import Plan from './routes/Plan'
 import Add from './routes/Add'
 import History from './routes/History'
 import Budget from './routes/Budget'
@@ -15,6 +16,7 @@ import Import from './routes/Import'
 
 const NAV = [
   { to: '/', label: 'Início', d: 'M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z' },
+  { to: '/planejamento', label: 'Planejar', d: 'M8 3h8v3H8zM5 6h14v15H5zM9 12h6M9 16h6' },
   { to: '/historico', label: 'Histórico', d: 'M4 5h16M4 12h16M4 19h10' },
   { to: '/orcamento', label: 'Orçamento', d: 'M4 19V9m5 10V5m5 14v-7m5 7V8' },
   { to: '/metas', label: 'Metas', d: 'M12 3v18M3 12h18M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z' },
@@ -34,6 +36,7 @@ export default function App() {
       <div className="app">
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/planejamento" element={<Plan />} />
           <Route path="/lancar" element={<Add />} />
           <Route path="/historico" element={<History />} />
           <Route path="/orcamento" element={<Budget />} />
